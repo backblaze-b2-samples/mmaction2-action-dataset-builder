@@ -14,13 +14,21 @@ It runs on **local OSS only** — MMAction2 does the labeling on your own hardwa
 
 ## What it looks like
 
-**Dashboard** — dataset metrics: footage ingested, builds, labeled clips, classes:
+**Dashboard** — dataset metrics (footage ingested, builds, labeled clips, classes, B2 storage) with a recent-builds table.
 
-![Dashboard view showing dataset build metrics and a recent builds table](docs/images/mmaction2-action-dataset-builder-dashboard.png)
+![Dashboard showing dataset build metrics and a recent builds table](docs/images/mmaction2-action-dataset-builder-dashboard.png)
 
-**Dataset explorer** — labeled clips grouped by action class with video preview:
+**Builds** — every dataset build listed with its recognizer, clip count, and status, plus rerun and delete actions.
 
-![Dataset explorer showing labeled clips grouped by Kinetics-400 action class](docs/images/mmaction2-action-dataset-builder-dataset.png)
+![Builds list showing each dataset build's recognizer, clip count, and status](docs/images/mmaction2-action-dataset-builder-builds.png)
+
+**Build detail** — per-build stats, label distribution, the versioned B2 release artifacts, and the labeled clips it produced.
+
+![Build detail showing per-build stats, label distribution, B2 release artifacts, and labeled clips](docs/images/mmaction2-action-dataset-builder-build-detail.png)
+
+**Dataset explorer** — a completed build's labeled clips grouped by Kinetics-400 action class, with in-browser video preview streamed from B2.
+
+![Dataset explorer with labeled clips grouped by action class and an open video preview](docs/images/mmaction2-action-dataset-builder-clip-detail.png)
 
 ## How it works
 
