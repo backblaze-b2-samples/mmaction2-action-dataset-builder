@@ -1,0 +1,53 @@
+# Heavy local ML + media stack for the action-dataset builder engine.
+#
+# These are intentionally SEPARATE from requirements.txt: the API boots and
+# `pnpm test:api` / `pnpm check:structure` pass WITHOUT this file installed,
+# because every mmaction/torch/scenedetect/ffmpeg import is lazy-loaded inside
+# app/repo/mmaction_engine.py and app/repo/video_tools.py — never at import
+# time. Install only when you want to actually run a build:
+#
+#   cd services/api && source .venv/bin/activate
+#   pip install -r requirements-ml.txt
+#
+# mmcv / mim CAVEAT (top verify-step risk):
+#   mmcv must match the torch build. The pip wheel below targets the CPU
+#   torch 2.1.x line. If `pip install mmcv` fails to find a matching prebuilt
+#   wheel for your platform, install it through OpenMMLab's mim, which resolves
+#   the right wheel automatically:
+#       pip install -U openmim
+#       mim install "mmcv>=2.1,<2.2"
+#   MMAction2's Kinetics-400 config tree ships under mmaction/.mim/configs for
+#   pip installs; repo/mmaction_engine.py resolves the bundled config from there
+#   and pairs it with the public OpenMMLab checkpoint URL (downloads on first
+#   use, no API key — B2 credentials only).
+#
+# Device note: CPU works for the CPU-friendly TSN/TSM R50 recognizers. The
+# engine auto-detects CUDA -> Apple MPS -> CPU at runtime and defaults to CPU
+# (see app/repo/mmaction_engine.select_device). mmcv's MPS support is weak, so
+# on Apple Silicon this collapses to CUDA -> CPU (MPS is mapped to CPU there).
+
+# --- PyTorch (CPU wheels; bump + match mmcv if you move to CUDA) ---
+torch==2.1.2
+torchvision==0.16.2
+
+# --- OpenMMLab stack (the marquee MMAction2 recognizer) ---
+mmengine>=0.10,<0.11
+mmcv>=2.1,<2.2
+mmaction2>=1.2,<1.3
+# openmim resolves the matching mmcv wheel when the bare pip install can't.
+openmim>=0.3.9
+
+# --- Segmentation + clip trimming ---
+scenedetect>=0.6.4,<0.7
+imageio-ffmpeg>=0.5,<0.7
+# MMAction2's default video decoding path uses decord; opencv is the fallback.
+decord>=0.6,<0.7
+opencv-python>=4.8,<5
+
+# --- Numerics ---
+# numpy 2.x breaks the pinned torch 2.1 ABI; stay on the 1.x line.
+numpy>=1.24,<2
+pandas>=2.0,<3
+# Pulled transitively by mmaction download utils; pin explicitly so a fresh
+# clone never hits an undeclared-dependency ModuleNotFoundError.
+requests>=2.31.0
