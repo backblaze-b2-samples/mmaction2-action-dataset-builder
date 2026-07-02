@@ -1,4 +1,4 @@
-<!-- last_verified: 2026-06-30 -->
+<!-- last_verified: 2026-07-02 -->
 # Feature: Labeling (MMAction2)
 
 ## Purpose
@@ -28,6 +28,7 @@ Assign a Kinetics-400 action label + confidence to every trimmed clip using **re
 ## Flow
 - The recognizer is initialized for the selected model (checkpoint fetched/cached on first use)
 - `inference_recognizer` runs on the clip; the top-1 Kinetics-400 label + score is returned
+- **Confidence is the model's own probability.** The TSN/TSM heads average clips as `'prob'`, so `pred_score` is already a softmax distribution. The engine reads the top class's probability directly (`_confidence_from_scores`) and does **not** re-softmax — re-softmaxing was a historical bug that flattened every score toward uniform (~1/400 ≈ 0.004), making confidence meaningless and forcing operators to set `confidence_threshold` to 0.
 - Clips scoring below `confidence_threshold` are **dropped** (not added to the dataset)
 - Kept clips are assigned a train/val/test split (see [Packaging](packaging.md)) and uploaded by class
 
@@ -40,6 +41,7 @@ Assign a Kinetics-400 action label + confidence to every trimmed clip using **re
 - ML stack not installed → import error surfaces with guidance to `pip install -r requirements-ml.txt` (the base API still boots because heavy imports are lazy)
 - Clip too short to decode the model's required frames → handled/skipped by the engine
 - All clips below threshold → build completes with zero kept clips (empty dataset)
+- **Out-of-vocabulary input → confident-looking wrong label.** Kinetics-400 has no "background/none" class and the engine always emits the top-1 class, so footage of an action *not* in the 400-class space (e.g. jumping jacks) is force-mapped to the nearest class (observed: `side kick`, `high kick`). This is expected model behavior, not a bug. For a meaningful demo/test, pick a source video whose dominant action **is** a Kinetics-400 class (e.g. boxing → `punching person (boxing)`, `skipping rope`, `deadlifting`); the label space lives in `services/api/app/repo/kinetics_400_labels.txt`.
 
 ## Verification
 - Structural test: `services/api/tests/test_structure.py::test_ml_sdks_only_in_repo` (mmaction/torch confined to `repo/`)

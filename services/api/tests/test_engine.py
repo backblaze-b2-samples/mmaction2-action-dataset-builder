@@ -64,6 +64,38 @@ def test_fallback_labels_are_kinetics_400():
     assert "yoga" in labels
 
 
+def test_confidence_preserves_prob_distribution():
+    """Regression: pred_score is already softmaxed (average_clips='prob').
+
+    The engine must NOT re-softmax it. A second softmax flattens a peaked
+    distribution toward uniform (~1/num_classes), which is what made every
+    real confidence collapse to ~0.004 and forced the gate to be disabled.
+    """
+    from app.repo.mmaction_engine import _confidence_from_scores
+
+    probs = [0.02, 0.90, 0.03, 0.05]  # already a valid distribution (sums to 1)
+    top, conf = _confidence_from_scores(probs)
+    assert top == 1
+    assert conf == 0.90  # preserved, NOT collapsed toward 0.25
+
+
+def test_confidence_softmaxes_raw_logits():
+    """Non-normalized scores (raw logits) are softmaxed into a distribution."""
+    from app.repo.mmaction_engine import _confidence_from_scores
+
+    top, conf = _confidence_from_scores([1.0, 5.0, 1.0, 1.0])
+    assert top == 1
+    assert 0.8 < conf < 1.0  # the peak dominates after softmax
+
+
+def test_as_score_list_flattens_tensor_shapes():
+    """A [1, N] batch shape is flattened to a 1-D float list."""
+    from app.repo.mmaction_engine import _as_score_list
+
+    assert _as_score_list([0.1, 0.9]) == [0.1, 0.9]
+    assert _as_score_list([[0.1, 0.9]]) == [0.1, 0.9]  # [1, N] -> [N]
+
+
 def test_stride_windows_are_capped_and_clamped():
     """Pure segmentation math runs without ffmpeg (no media decode here)."""
     from app.repo.video_tools import _stride_windows

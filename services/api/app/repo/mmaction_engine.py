@@ -20,6 +20,7 @@ is always a valid fallback and a GPU is never hard-required.
 """
 
 import logging
+import math
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -155,12 +156,49 @@ def _classes_for(model) -> list[str]:
     return _fallback_labels()
 
 
+def _as_score_list(scores) -> list[float]:
+    """Flatten a torch/numpy score tensor (or sequence) to a 1-D float list."""
+    if hasattr(scores, "tolist"):
+        scores = scores.tolist()
+    # pred_score is 1-D in mmaction 1.x; defensively flatten a [1, N] shape.
+    if scores and isinstance(scores[0], (list, tuple)):
+        scores = scores[0]
+    return [float(s) for s in scores]
+
+
+def _confidence_from_scores(scores: list[float]) -> tuple[int, float]:
+    """Top class index + its probability from a per-class score vector.
+
+    Our TSN/TSM heads are configured with `average_clips='prob'`, so
+    `inference_recognizer` already returns a softmax distribution in
+    `pred_score`. Re-softmaxing it (the historical bug) flattened every
+    distribution toward uniform (~1/num_classes ~= 0.0025 for Kinetics-400),
+    making `confidence` meaningless and forcing operators to disable the
+    confidence gate. So we softmax ONLY when the vector is not already a
+    normalized, non-negative distribution (e.g. a model emitting raw logits).
+    """
+    if not scores:
+        return 0, 0.0
+    already_distribution = all(s >= 0 for s in scores) and math.isclose(
+        sum(scores), 1.0, abs_tol=1e-3
+    )
+    if not already_distribution:
+        peak = max(scores)
+        exps = [math.exp(s - peak) for s in scores]
+        denom = sum(exps)
+        scores = [e / denom for e in exps]
+    top = max(range(len(scores)), key=scores.__getitem__)
+    return top, float(scores[top])
+
+
 def label_clip(clip_path: str, model_id: str = DEFAULT_MODEL) -> tuple[str, float]:
     """Run REAL MMAction2 inference on one clip -> (action_label, confidence).
 
     Loads the recognizer (cached) and runs `inference_recognizer`. The returned
-    ActionDataSample carries per-class scores; we take the top class and its
-    softmaxed confidence. Raises MissingMLDependencies if the stack is absent.
+    ActionDataSample carries per-class scores in `pred_score`, which is already
+    a softmax distribution (`average_clips='prob'`); we take the top class and
+    its probability via `_confidence_from_scores` (no re-softmax). Raises
+    MissingMLDependencies if the stack is absent.
     """
     try:
         from mmaction.apis import inference_recognizer
@@ -176,17 +214,14 @@ def label_clip(clip_path: str, model_id: str = DEFAULT_MODEL) -> tuple[str, floa
     model = _load_recognizer(model_id)
     result = inference_recognizer(model, clip_path)
 
-    import torch  # local — torch is a transitive mmaction dep
-
-    # MMAction2 1.x: result.pred_score is a Tensor of per-class scores.
+    # MMAction2 1.x: result.pred_score is a Tensor of per-class probabilities
+    # (the head averages clips as 'prob', i.e. it is already softmaxed).
     scores = getattr(result, "pred_score", None)
     if scores is None:
         # Older API surface fallback.
         scores = result.pred_scores.item  # type: ignore[attr-defined]
-    probs = torch.softmax(scores.float(), dim=-1)
-    top = int(torch.argmax(probs).item())
-    confidence = float(probs[top].item())
 
+    top, confidence = _confidence_from_scores(_as_score_list(scores))
     classes = _classes_for(model)
     label = classes[top] if top < len(classes) else f"class_{top}"
     return label, confidence
