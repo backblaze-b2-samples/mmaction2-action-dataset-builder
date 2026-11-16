@@ -27,7 +27,7 @@
 # on Apple Silicon this collapses to CUDA -> CPU (MPS is mapped to CPU there).
 
 # --- PyTorch (CPU wheels; bump + match mmcv if you move to CUDA) ---
-torch==2.1.2
+torch==2.13.0
 torchvision==0.16.2
 
 # --- OpenMMLab stack (the marquee MMAction2 recognizer) ---
